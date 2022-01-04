@@ -13,7 +13,7 @@ def n_round(n):
         return math.floor(n)
     return math.ceil(n)
 
-def FreqTable(dataframe,col,sort=1,weightList=[],wRound=False):
+def FreqTable(dataframe,col,sort=1,weightList=[],wRound=False,PCTround=False):
     
     origin = dataframe
     
@@ -35,11 +35,22 @@ def FreqTable(dataframe,col,sort=1,weightList=[],wRound=False):
         for i in weightList:
             for j in list(dff[col]):
                 dff.loc[dff[col]==j,i] = origin.loc[origin[col]==j,i].sum()
+                dff.loc[dff[col]==j,i+'(%)'] = (origin.loc[origin[col]==j,i].sum()/
+                                                origin[i].sum() * 100
+                                                )
             
             dff.loc[v+1,i] = dff[i].sum()
+            
       
     if wRound==True:
         for i in weightList:
             dff[i] = dff[i].apply(n_round)
+    
+    if PCTround==True:
+        for i in ['percentage(%)'] + [a+'(%)' for a in weightList]:
+            dff[i] = dff[i].apply(n_round)    
+    
+    
+    
     
     return dff
