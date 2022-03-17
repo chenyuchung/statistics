@@ -43,7 +43,7 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
     
     ii = 1
     
-    if missing != []:
+    if missing != [] or sysmissN != 0:
         
         dff.loc[v+1,dff.columns.values] = ['Valid Total',
                                            dff.loc[dff[col].isin(missing)==False,'frequency'].sum(),
@@ -57,7 +57,7 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
             
             ii += 1
 
-        dff.loc[v+ii,dff.columns.values] = ['Total',un_sum,un_sum/un_sum*100,np.nan]
+        dff.loc[v+ii,dff.columns.values] = ['Total',len(origin),un_sum/un_sum*100,np.nan]
         
     else: 
         
@@ -128,6 +128,7 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
                           dff.iloc[ix:ix+len(missing)],
                           dff.iloc[ix+len(missing)+1:]]).reset_index(drop=True)
 
+    else: dff2 = dff.reset_index(drop=True)
 
 
     #set if round weighted value is needed
