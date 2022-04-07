@@ -14,7 +14,7 @@ def n_round(n):
         return math.floor(n)
     return math.ceil(n)
 
-def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[],sort=1):
+def FreqTable2(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[],sort=1):
     
     origin = dataframe
     
@@ -48,7 +48,7 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
         dff.loc[v+1,dff.columns.values] = ['Valid Total',
                                            dff.loc[dff[col].isin(missing)==False,'frequency'].sum(),
                                            dff.loc[dff[col].isin(missing)==False,'frequency'].sum()/len(origin),
-                                           1/1*100]
+                                           1/1]
         ii += 1
 
         if sysmissN != 0:
@@ -57,7 +57,7 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
             
             ii += 1
 
-        dff.loc[v+ii,dff.columns.values] = ['Total',len(origin),un_sum/un_sum*100,np.nan]
+        dff.loc[v+ii,dff.columns.values] = ['Total',len(origin),un_sum/un_sum,np.nan]
         
     else: 
         
@@ -72,12 +72,12 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
             for j in valuelist:
                 dff.loc[dff[col]==j,i] = origin.loc[origin[col]==j,i].sum()
                 dff.loc[dff[col]==j,i+'(%)'] = (origin.loc[origin[col]==j,i].sum()/
-                                                origin[i].sum() * 100
+                                                origin[i].sum() 
                                                 )
                 
                 dff.loc[dff[col]==j,i+'(valid%)'] = (
                     origin.loc[(origin[col]==j) & (origin[col].isin(missing)==False),i].sum()/
-                                                origin.loc[origin[col].isin(missing)==False,i].sum() * 100
+                                                origin.loc[origin[col].isin(missing)==False,i].sum() 
                                                 )           
     
     #fill empty percentage
@@ -90,10 +90,10 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
                 dff.loc[v+iii,i] = origin.loc[origin[col].isin(missing)==False,i].sum()
                 
                 dff.loc[v+iii,i+'(%)'] = ( origin.loc[origin[col].isin(missing)==False,i].sum() /
-                                        origin[i].sum() * 100
+                                        origin[i].sum() 
                                         )
                 
-                dff.loc[v+iii,i+'(valid%)'] = 1/1*100
+                dff.loc[v+iii,i+'(valid%)'] = 1/1
                 
                 iii += 1
  
@@ -102,13 +102,13 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
                     dff.loc[v+iii,i] = origin[i].sum() - origin.loc[origin[col].isin(missing)==False,i].sum()
                 
                     dff.loc[v+iii,i+'(%)'] = ( (origin[i].sum() - origin.loc[origin[col].isin(missing)==False,i].sum()) /
-                                            origin[i].sum() * 100
+                                            origin[i].sum() 
                                             )
                     
                     iii += 1
                 
                 dff.loc[v+iii,i] = origin[i].sum()
-                dff.loc[v+iii,i+'(%)'] = origin[i].sum() / origin[i].sum() *100
+                dff.loc[v+iii,i+'(%)'] = origin[i].sum() / origin[i].sum() 
                 dff.loc[v+iii,i+'(valid%)'] = np.nan
                 
             else:
@@ -119,16 +119,20 @@ def FreqTable(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[]
 
     
     #rearrange row order
-    if missing != []:
-        missing.sort()
-        ix = dff.loc[dff[col]==missing[0]].index[0]
+    try:
         
-        dff2 = pd.concat([dff.iloc[:ix],
-                          dff.iloc[ix+len(missing):ix+len(missing)+1],
-                          dff.iloc[ix:ix+len(missing)],
-                          dff.iloc[ix+len(missing)+1:]]).reset_index(drop=True)
+        if missing != []:
+            missing.sort()
+            ix = dff.loc[dff[col]==missing[0]].index[0]
+            
+            dff2 = pd.concat([dff.iloc[:ix],
+                              dff.iloc[ix+len(missing):ix+len(missing)+1],
+                              dff.iloc[ix:ix+len(missing)],
+                              dff.iloc[ix+len(missing)+1:]]).reset_index(drop=True)
+            
+        else: dff2 = dff.reset_index(drop=True)
 
-    else: dff2 = dff.reset_index(drop=True)
+    except: pass
 
 
     #set if round weighted value is needed
