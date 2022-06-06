@@ -9,7 +9,7 @@ Created on Thu Mar 17 17:10:55 2022
 
 import pandas as pd
 
-def crosstab(dataframe,indexName,columnName,weight=None,colmissing=[]):
+def crosstab(dataframe,indexName,columnName,weight=None,colmissing=[],colpercent=False):
     
     dfn = dataframe.loc[dataframe[columnName].isin(colmissing)==False].reset_index(drop=True).fillna(99)
 
@@ -37,9 +37,13 @@ def crosstab(dataframe,indexName,columnName,weight=None,colmissing=[]):
 
     for i in yitems:
                
-        dfc[str(int(i))+'%'] = dfc[i] / dfc['Ntemp']   #row_percentage
+        dfc[str(int(i))+'%(R)'] = dfc[i] / dfc['Ntemp']   #row_percentage, default open
         
-        #dfc[str(int(i))+'%'] = dfc[i] / dfc.loc[v+1,i]  #column_percentage
+    if colpercent==True:
+        
+        for i in yitems:
+        
+            dfc[str(int(i))+'%(C)'] = dfc[i] / dfc.loc[v+1,i]  #column_percentage
     
     dfc['N'] = dfc[yitems].sum(axis=1)
     
@@ -50,12 +54,13 @@ def crosstab(dataframe,indexName,columnName,weight=None,colmissing=[]):
     return dfc
 
 
-def main_crosstab(dataframe,columnName,weight=None,party_type=1,optional_variables=[]):
+def main_crosstab(dataframe,columnName,weight=None,party_type=1,optional_variables=[],colmissing=[],
+                  colpercent=False):
     
     if party_type == 1: partyr = 'supporting_partyr'
     elif party_type == 2: partyr = 'supporting_partyrr'
     
-    main_variables = ['gender','agegp','edugp','edugpr','q1a','supporting_party',partyr]
+    main_variables = ['gender','agegp','edugp','edugpr','area','supporting_party',partyr]
 
     variables = main_variables + optional_variables
     
@@ -65,7 +70,7 @@ def main_crosstab(dataframe,columnName,weight=None,party_type=1,optional_variabl
     
     for i in variables:
     
-        locals()['C'+i] = crosstab(dataframe,i,columnName,weight)
+        locals()['C'+i] = crosstab(dataframe,i,columnName,weight,colmissing,colpercent)
         
         crosstables.append('C'+i)
     
