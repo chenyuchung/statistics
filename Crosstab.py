@@ -55,12 +55,22 @@ def crosstab(dataframe,indexName,columnName,weight=None,colmissing=[],colpercent
 
 
 def main_crosstab(dataframe,columnName,weight=None,party_type=1,optional_variables=[],colmissing=[],
-                  colpercent=False):
+                  colpercent=False,customer=None):
     
-    if party_type == 1: partyr = 'supporting_partyr'
-    elif party_type == 2: partyr = 'supporting_partyrr'
+    if party_type == 1: partyr = ['supporting_partyr']
+    elif party_type == 2: partyr = ['supporting_partyrr']
+    elif party_type == 0: partyr = []
     
-    main_variables = ['gender','agegp','edugp','edugpr','area','supporting_party',partyr]
+    if customer == 'TPOF':
+        
+        main_variables = ['gender','agegp','edugp','area','supporting_party']
+        
+    elif customer == 'TPOF2':
+        
+        main_variables = ['gender','agegp','edugp','supporting_party']
+        
+    else:
+        main_variables = ['gender','agegp','edugp','edugpr','area','supporting_party']+partyr
 
     variables = main_variables + optional_variables
     
