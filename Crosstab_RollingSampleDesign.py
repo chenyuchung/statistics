@@ -74,7 +74,7 @@ def main_crosstab_rolling(dataframe,columnName,weight=None,party_type=1,optional
     elif party_type == 2: partyr = ['supporting_partyrr']
     elif party_type == 0: partyr = []
     
-    main_variables = ['gender','agegp','edugp','edugpr','area','arear','supporting_party']+partyr
+    main_variables = ['gender','agegp2','edugp','edugpr','area','arear','supporting_party']+partyr
 
     variables = main_variables + optional_variables
     
