@@ -132,7 +132,7 @@ def FreqTable2(dataframe,col,weightList=[],wRound=False,PCTround=False,missing=[
             
         else: dff2 = dff.reset_index(drop=True)
 
-    except: pass
+    except: dff2 = dff.reset_index(drop=True)
 
 
     #set if round weighted value is needed

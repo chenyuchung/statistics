@@ -30,7 +30,7 @@ def crosstab_rolling(dataframe,indexName,columnName,weight=None,
 
     v = dfc.last_valid_index()
     
-    dfc.loc[v+1,indexName] = indexName + '_Total'
+    dfc.loc[v+1,indexName] = str(indexName) + '_Total'
     
     yitems = list(dfc.columns.values)
     yitems.remove(indexName)
