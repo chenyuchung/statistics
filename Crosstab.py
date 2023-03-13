@@ -33,10 +33,14 @@ def crosstab(dataframe,indexName,columnName,weight=None,colmissing=[],colpercent
         
         ori_order = list(dfc.columns.values)
         
-        m,n = ori_order.index(0),ori_order.index(1)
-        ori_order[m],ori_order[n] = ori_order[n],ori_order[m]
+        if 1 not in ori_order or 0 not in ori_order:
+            pass
         
-        dfc = dfc[ori_order]
+        else:
+            m,n = ori_order.index(0),ori_order.index(1)
+            ori_order[m],ori_order[n] = ori_order[n],ori_order[m]
+        
+            dfc = dfc[ori_order]
 
 
    #新增總計欄位
