@@ -9,7 +9,8 @@ import pandas as pd
 import os
 
 class DataChecker:
-    def __init__(self, df, varlist, path, wave, date, survey_name='問卷組別未設定', multi_pairs=None, work_vars=None, survey_code='tscs251'):
+    def __init__(self, df, varlist, path, wave, date, survey_name='問卷組別未設定', multi_pairs=None, work_vars=None, 
+                 survey_code='tscs251',appellation=None):
         self.df = df
         self.varlist = varlist
         self.path = path
@@ -20,6 +21,23 @@ class DataChecker:
         global work  # 使用全域變數 work
         self.multi_pairs = multi_pairs if multi_pairs is not None else [('zb5a11', 'kzb5a')]
         self.work_vars = work_vars if work_vars is not None else work
+        
+        # ✅ 預設稱謂字典
+        self.appellation = appellation if appellation is not None else {
+                            
+                            #明顯為男性稱呼
+                            "male": ['先生','父','爸','爺','阿公','男','夫','兄','哥','弟','兒子','叔','舅','老公',
+                                     '祖父','婿','公公','岳父'], 
+                            
+                            #明顯為女性稱呼
+                            "female": ['太太','老婆','妻','女','小姐','姊','姐','妹','姨','姑','女兒','母','媽','孫女',
+                                       '媳','阿嬤','婆婆','岳母','夫人'],
+                            
+                            #明顯為配偶稱呼
+                            "spouse":['配偶','老婆','太太','夫人','妻','先生','老公','丈夫','夫']
+                            
+                                                                        }        
+        
         self.checklist = pd.DataFrame(columns=[
             '問卷組別', '訪員編號', '受訪者編號', '變項名稱原始答案',
             '不符合說明', '計畫回覆', 'wave', '檢誤人員說明'
@@ -183,6 +201,11 @@ class DataChecker:
                 try:
                     for i, varname in enumerate(var_list):
                         local_env[f"it{i+1}"] = self.df.loc[idx, varname]
+                        
+                    local_env["spouse_appellation"] = self.appellation["spouse"]
+                    local_env["male_appellation"] = self.appellation["male"]
+                    local_env["female_appellation"] = self.appellation["female"]
+                        
                     if eval(rule, {}, local_env) == expected_result:
                         no = self.df.loc[idx, 'no']
                         id_ = self.df.loc[idx, 'id']
