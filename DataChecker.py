@@ -25,6 +25,12 @@ class DataChecker:
             '不符合說明', '計畫回覆', 'wave', '檢誤人員說明'
         ])
 
+    def _sanitize_rule(self, rule: str) -> str:
+        """清理 Excel 讀入的 check_rule 字串（處理換行、符號、空白）"""
+        if isinstance(rule, str):
+            return rule.replace('\n', ' ').replace('\r', ' ').strip()
+        return rule
+
     def _add_error(self, no, id_, content, reason):
         self.checklist.loc[len(self.checklist)] = {
             '問卷組別': self.survey_name,
@@ -168,7 +174,7 @@ class DataChecker:
         for _, row in logic.iterrows():
             check_no = row['check_no']
             var_list = str(row['var_list']).split('@')
-            rule = row['check_rule']
+            rule = self._sanitize_rule(row['check_rule'])  # 使用新加入的清理方法
             expected_result = to_bool(row['ToF'])
             description = row['description']
             out_vars = str(row['out_var']).split('@')
@@ -185,6 +191,14 @@ class DataChecker:
                 except Exception as e:
                     print(f"❗ 邏輯檢誤錯誤：check_no={check_no}, id={self.df.loc[idx, 'id']}，原因：{e}")
                     continue
+    
+    def export_logic_error_log(self):
+        if self.logic_errors:
+            df_log = pd.DataFrame(self.logic_errors)
+            filename = f"{self.survey_code}_LOGIC_ERROR_w{self.wave}_{self.date}.xlsx"
+            save_path = os.path.join(self.path, "02_check", filename)
+            df_log.to_excel(save_path, index=False)
+            print(f"⚠️ 邏輯錯誤記錄已輸出至：{save_path}")
 
     def check_response_notes(self):
         """
