@@ -34,8 +34,10 @@ class DataChecker:
                                        '媳','阿嬤','婆婆','岳母','夫人'],
                             
                             #明顯為配偶稱呼
-                            "spouse":['配偶','老婆','太太','夫人','妻','先生','老公','丈夫','夫']
+                            "spouse":['配偶','老婆','太太','夫人','妻','先生','老公','丈夫','夫'],
                             
+                            #明顯為受訪者本人稱呼
+                            "participant":['自己','本人','己','受訪者']
                                                                         }        
         
         self.checklist = pd.DataFrame(columns=[
@@ -205,6 +207,7 @@ class DataChecker:
                     local_env["spouse_appellation"] = self.appellation["spouse"]
                     local_env["male_appellation"] = self.appellation["male"]
                     local_env["female_appellation"] = self.appellation["female"]
+                    local_env["participant_appellation"] = self.appellation["participant"]
                         
                     if eval(rule, {}, local_env) == expected_result:
                         no = self.df.loc[idx, 'no']
