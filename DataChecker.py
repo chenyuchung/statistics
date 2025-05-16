@@ -26,7 +26,7 @@ class DataChecker:
         self.appellation = appellation if appellation is not None else {
                             
                             #明顯為男性稱呼
-                            "male": ['先生','父','爸','爺','阿公','男','夫','兄','哥','弟','兒子','叔','舅','老公',
+                            "male": ['先生','父','爸','爺','阿公','男','丈夫','兄','哥','弟','兒子','叔','舅','老公',
                                      '祖父','婿','公公','岳父'], 
                             
                             #明顯為女性稱呼
@@ -195,7 +195,7 @@ class DataChecker:
             check_no = row['check_no']
             var_list = str(row['var_list']).split('@')
             rule = self._sanitize_rule(row['check_rule'])  # 使用新加入的清理方法
-            expected_result = to_bool(row['ToF'])
+            expected_result = to_bool(row['TorF'])
             description = row['description']
             out_vars = str(row['out_var']).split('@')
             for idx in self.df.index:
