@@ -544,12 +544,12 @@ class RecodeEngine:
 
         def logic(row):
             item = row[item_col]
-            if item == 1: alt = 1
-            elif item ==2: alt = 2
-            elif item in [3,8]: alt = 3
-            elif item in [4]: alt = 4
-            elif item in [5,6]: alt = 5
-            elif item == 7: alt = 6
+            if item == 1: alt = 1         #台灣閩南人
+            elif item ==2: alt = 2        #台灣客家人
+            elif item in [3,8]: alt = 3   #大陸/外省人
+            elif item in [4]: alt = 4     #原住民
+            elif item in [5,6]: alt = 5   #大陸/中國籍
+            elif item == 7: alt = 6       #東南亞籍
             elif item in [9,10]: alt = 7  #根據過去紀錄，平埔族歸入其他
             elif item == -8: alt = -7
             elif item == -7: alt = -8
