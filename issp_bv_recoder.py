@@ -6,13 +6,16 @@ Created on Tue May 20 17:01:44 2025
 """
 
 import numpy as np
+import pandas as pd
+import inspect
 
 class RecodeEngine:
-    def __init__(self, df, bv_mapping):
+    def __init__(self, df, bv_mapping, log_file=None):
         self.df = df
         self.bv = bv_mapping
         self.log = []  # 儲存偵錯訊息
         self.report_log = []
+        self.log_file = log_file  # 日誌檔路徑
         self.tc_country_dict = {
             '中國': 156, '俄羅斯': 643, '加拿大': 124, '北韓': 408, '南非': 710,
             '印尼': 360, '台灣': 158, '墨西哥': 484, '奧地利': 40, '孟加拉': 50,
@@ -21,11 +24,38 @@ class RecodeEngine:
             '瑞典': 752, '瑞士': 756, '美國': 840, '英國': 826, '荷蘭': 528, '西班牙': 724, '越南': 704,
             '阿富汗': 4, '阿根廷': 32, '韓國': 410, '南韓': 410,'馬來西亞': 458
             }
+    
+    def log_print(self, content, func_name=None):
+        
+        if func_name is None:
+            # 自動找出呼叫 log_print 的上一層函式名（即「實際使用者」）
+            stack = inspect.stack()
+            if len(stack) >= 3:
+                func_name = stack[2].function
+            else:
+                func_name = 'unknown'
+        
+        if isinstance(content, pd.DataFrame):
+            output = content.to_string(index=False)
+        else:
+            output = str(content)
+
+        timestamp = pd.Timestamp('today').strftime('%Y/%m/%d %H:%M:%S')
+        header = f"\n=== [{timestamp}] Output from [{func_name}] ===\n"
+        full_output = header + output + "\n"
+
+        # 印出到畫面
+        print(full_output)
+
+        # 同步寫入檔案
+        if self.log_file:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(full_output)
+
         
     def report_invalid(self, label, source_cols=None):
         mask = self.df[label] == -90
         if mask.any():
-            print(f'⚠️ [{label}] recode = -90 的樣本：')
             cols = ['id']
             if source_cols:
                 if isinstance(source_cols, str):
@@ -34,7 +64,12 @@ class RecodeEngine:
                     cols += source_cols
             cols.append(label)
             cols = [c for c in cols if c in self.df.columns]
-            print(self.df.loc[mask, cols])    
+            
+            df_out = self.df.loc[mask, cols]
+            message = f'⚠️ [{label}] recode = -90 的樣本：'
+            self.log_print(message)
+            self.log_print(df_out)
+            
 
     def report_other_text(self, label, other_codes=[]):
         """
@@ -216,7 +251,7 @@ class RecodeEngine:
                 if mainstat == 10: alt = 2   # 🔁 若 MAINSTAT 來源為 10(退休)，則強制改為 2  --> 參秋玲2023recode語法
             elif item in [4, 5]: alt = 2
             elif item == 6: alt = 3
-            elif item == -8: alt = -9
+            elif item in [-7,-8]: alt = -9   #配偶WORK有可能為-7
             elif item == -6: alt = -4
             else: alt = item
 
@@ -240,8 +275,8 @@ class RecodeEngine:
 
             # WORKHRS recode 規則
             if 96 <= item <= 168: alt = 96
-            elif item in [-2, -8]: alt = -9
-            elif item == -7: alt = -8
+            elif item in [-2, -8]: alt = -9  #work hrs ==-2 should recode to -9 (2022 .py file & 2023 do file)
+            elif item == [-7]: alt = -8   #ISSP ARCHIVE告知 'time various'要歸入不知道 (from 2019 do file)
             elif item == -6: alt = -4   # workhr為-6應為wk==6或沒有伴侶
             else: alt = item
             
@@ -432,7 +467,7 @@ class RecodeEngine:
 
             # MAINSTAT recode 規則
             if wk == -6: alt = -4  # wk為-6應為沒有伴侶
-            elif item in [1,2,3,4,5,8,14,15]: alt = 1
+            elif item in [1,2,3,4,5,8,14,15]: alt = 1  #In paid work
             elif item == 6: alt = 2
             elif item == 7: alt = 3
             elif item == 9: alt = 4
@@ -450,6 +485,45 @@ class RecodeEngine:
 
         self.df[label] = self.df.apply(logic, axis=1)
         self.report_invalid(label, [item_col, wk_col])
+
+    def work_x_mainstat_check(self,work,mainstat):
+        work_col = self.bv['SPWORK'] if work.startswith('SP') else self.bv['WORK']
+        mainstat_col = self.bv['SPMAINST'] if mainstat.startswith('SP') else self.bv['MAINSTAT']
+        mainstat_text = 'k' + mainstat_col
+        
+        mask = ((self.df[work] == 2) & (self.df[mainstat] == 1)) | ((self.df[work] == 1) & (self.df[mainstat] != 1))
+
+        if mask.any():
+            print('')
+            print(f'⚠️ {work} 與 {mainstat} recode 結果矛盾的樣本：')
+            
+            # ➤ 基本欄位
+            cols = ['id', mainstat_col, mainstat_text, work_col, work, mainstat]
+            
+            # ➤ 加入受訪者本人才有的 TW_RINC 欄
+            if work == 'WORK':
+                income_col = self.bv['TW_RINC']
+                cols.append(income_col)
+                
+            # ➤ ISCO 附加欄位
+            isco_base = self.bv['SPISCO08'] if work.startswith('SP') else self.bv['ISCO08']
+            prefix = isco_base[:-2]
+            isco_related = [prefix + suffix for suffix in ['a1', 'a2', 'b1', 'b2', 'b3', 'c']]
+            cols += [col for col in isco_related if col in self.df.columns]
+            
+            
+            # ➤ 顯示結果
+            result = self.df.loc[mask, cols]
+            print(result)
+            
+        """
+        note. 
+        mainstat 為 (09)學徒 (According to 2020 do file)
+                或  (10)退休 (According to 2023 do file)
+        ，但 WORK == 1者，基本上會recode WORK = 2。
+        
+        """
+                
 
     def recode_tw_relig(self, label, buddhism_item=2):
         item_col = self.bv[label]
