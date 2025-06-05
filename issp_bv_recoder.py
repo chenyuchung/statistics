@@ -36,7 +36,7 @@ class RecodeEngine:
                 func_name = 'unknown'
         
         if isinstance(content, pd.DataFrame):
-            output = content.to_string(index=False)
+            output = content.to_string()
         else:
             output = str(content)
 
@@ -67,8 +67,10 @@ class RecodeEngine:
             
             df_out = self.df.loc[mask, cols]
             message = f'⚠️ [{label}] recode = -90 的樣本：'
+            message += '\n'
+            message += df_out.to_string(index=False)
+            
             self.log_print(message)
-            self.log_print(df_out)
             
 
     def report_other_text(self, label, other_codes=[]):
@@ -88,8 +90,12 @@ class RecodeEngine:
         df_other = self.df.loc[mask, ['id', text_col]].dropna()
 
         if not df_other.empty:
-            print(f'📌 來自「{label}」的 recode=其他 之開放文字內容如下（共 {len(df_other)} 筆）：')
-            print(df_other)
+            
+            message = f'📌 來自「{label}」的 recode=其他 之開放文字內容如下（共 {len(df_other)} 筆）：'
+            message += '\n'
+            message += df_other.to_string(index=False)
+            
+            self.log_print(message)
 
 
     def generate_birth_age(self, survey_year=114, col_y='a2y', col_r='a2r', col_m='a2m', col_sdt='sdt1', col_year='year'):
@@ -110,8 +116,15 @@ class RecodeEngine:
         self.df['AGE'] = np.where(self.df[col_m] < self.df['month'], self.df['AGE'] + 1, self.df['AGE'])
         
         # 顯示 recode 結果
-        print(self.df[['BIRTH', col_y, col_r]].describe())
-        print(self.df[['AGE', 'BIRTH', col_m, col_sdt]].describe())
+        desc1 = self.df[['BIRTH', col_y, col_r]].describe()
+        desc1.index.name = 'statistic'
+        
+        desc2 = self.df[['AGE', 'BIRTH', col_m, col_sdt]].describe()
+        desc2.index.name = 'statistic'
+        
+        with pd.option_context('display.precision', 2):
+            self.log_print(desc1, func_name='generate_birth_age')
+            self.log_print(desc2, func_name='generate_birth_age')
 
 
 
@@ -494,8 +507,7 @@ class RecodeEngine:
         mask = ((self.df[work] == 2) & (self.df[mainstat] == 1)) | ((self.df[work] == 1) & (self.df[mainstat] != 1))
 
         if mask.any():
-            print('')
-            print(f'⚠️ {work} 與 {mainstat} recode 結果矛盾的樣本：')
+            message = f'⚠️ {work} 與 {mainstat} recode 結果矛盾的樣本：'
             
             # ➤ 基本欄位
             cols = ['id', mainstat_col, mainstat_text, work_col, work, mainstat]
@@ -514,7 +526,10 @@ class RecodeEngine:
             
             # ➤ 顯示結果
             result = self.df.loc[mask, cols]
-            print(result)
+            message += '\n'
+            message += result.to_string(index=False)
+            
+            self.log_print(message, func_name='work_x_mainstat_check')
             
         """
         note. 
@@ -637,8 +652,10 @@ class RecodeEngine:
         # 特殊處理：只抓 recode=7 且原始 item != 9 的狀況
         mask = (self.df[label] == 7) & (self.df[item_col] != 9)
         if not self.df.loc[mask].empty:
-            print(f'📌 「{label}」為 7 且原始 item 非 9 者如下：')
-            print(self.df.loc[mask, ['id', item_col, text_col, label]])
+            message = f'📌 「{label}」為 7 且原始 item 非 9 者如下：'
+            message += '\n'
+            message += self.df.loc[mask, ['id', item_col, text_col, label]].to_string(index=False)
+            self.log_print(message, func_name='recode_tw_ethn')
 
         
 
@@ -665,8 +682,8 @@ class RecodeEngine:
         def logic(row):
             item = row[item_col]
             if item in candidate_codes: return item
-            elif item == candidate_codes + 1: return 96  #廢票
-            elif item == candidate_codes + 2: return -7  #拒答
+            elif item == num_candidates + 1: return 96  #廢票
+            elif item == num_candidates + 2: return -7  #拒答
             elif item in list(range(num_candidates + 3, num_candidates + 6)) + [-7, -8]: return -4  #未投票、無資格或投票狀態不明
             else: return -90
 
@@ -789,8 +806,9 @@ class RecodeEngine:
         
         # 輸出實際使用到的國名清單
         if self.used_tc_countries:
-            print(f"✅ recode_born：以下透過 text_col 成功 recode 的國名（共 {len(self.used_tc_countries)} 筆）：")
-            print(sorted(self.used_tc_countries))
+            message = f"✅ recode_{label}：以下透過 text_col 成功 recode 的國名（共 {len(self.used_tc_countries)} 筆）："
+            country_list_str = '、'.join(sorted(self.used_tc_countries))
+            self.log_print(message + '\n' + country_list_str, func_name = 'recode_' + label)
 
 
     def recode_tw_region(self):
@@ -887,9 +905,9 @@ class RecodeEngine:
                 lambda row: sample_target_str(row['household_r'], row['sample_rule']),
                 axis=1
                 )
-            print("🔧 自動產出 result_txt 欄位。")
+            self.log_print("🔧 自動產出 result_txt 欄位。")
         else:
-            print("ℹ️ 偵測到既有 result_txt 欄位，將直接使用不覆蓋。")
+            self.log_print("ℹ️ 偵測到既有 result_txt 欄位，將直接使用不覆蓋。")
                                                 
 
         # 指定 DWEIGHT_HH
@@ -900,10 +918,13 @@ class RecodeEngine:
 
         unmatched = self.df[self.df['DWEIGHT_HH'].isna()]
         if not unmatched.empty:
-            print("⚠️ 以下樣本無法對應到 DWEIGHT_HH 權重條件：")
-            print(unmatched[['id', 'household_r', 'sample_rule', 'result_txt']])
+            meaasge = "⚠️ 以下樣本無法對應到 DWEIGHT_HH 權重條件："
+            meaasge += '\n'
+            meaasge += unmatched[['id', 'household_r', 'sample_rule', 'result_txt']].to_string(index=False)
+            
+            self.log_print(meaasge)
         else:
-            print("✅ DWEIGHT_HH 欄位計算完成，所有樣本皆成功配對。")
+            self.log_print("✅ DWEIGHT_HH 欄位計算完成，所有樣本皆成功配對。")
 
 
     def recode_mode(self, col_za2='za2', col_zb4='zb4', col_zb604='zb604'):
@@ -930,7 +951,7 @@ class RecodeEngine:
 
         self.df['MODE'] = self.df.apply(logic, axis=1)
         self.report_invalid('MODE', [col_za2, 'k'+col_za2, col_zb4, 'k'+col_zb4, col_zb604])
-        print(self.df['MODE'].value_counts(dropna=False))
+        self.log_print(self.df['MODE'].value_counts(dropna=False), func_name='recode_mode')
 
 
 
