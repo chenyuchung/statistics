@@ -154,17 +154,47 @@ class DataChecker:
 
     def check_phone_format(self):
         phone_vars = ['cell1', 'cell2', 'phone1', 'phone2']
+        allowed_symbols = ['#', '-', '轉', '分機', 'ext', ' ']
+        
         for idx in self.df.index:
             phones = [str(self.df.loc[idx, var]) for var in phone_vars]
             no = self.df.loc[idx, 'no']
             id_ = self.df.loc[idx, 'id']
+            
+            # 檢查是否完全沒有聯絡電話
             if all(p in ['0', '-8'] for p in phones):
                 content = '，'.join([f"{var}={self.df.loc[idx, var]}" for var in phone_vars])
                 self._add_error(no, id_, content, "完全沒有連絡電話或全拒答")
-            for var in ['cell1', 'cell2']:
-                val = str(self.df.loc[idx, var])
-                if val not in ['-8', '', '0'] and len(val) < 10:
-                    self._add_error(no, id_, f"{var}={val}", f"{var}_號碼少於10碼")
+                
+            
+            for var in phone_vars:
+                raw_val = str(self.df.loc[idx, var]).strip()
+                if raw_val in ['0', '-8', '']:
+                    continue
+
+                # 去除允許的符號
+                simplified = raw_val
+                for sym in allowed_symbols:
+                    simplified = simplified.replace(sym, '')
+                simplified = simplified.strip()
+
+                # 市話欄位：僅檢查非法字元
+                if var in ['phone1', 'phone2']:
+                    if not simplified.isdigit():
+                        self._add_error(no, id_, f"{var}={raw_val}", f"{var}_號碼格式有誤，請確認")
+                    continue
+
+                # 手機欄位處理（cell1, cell2）
+                if var in ['cell1', 'cell2']:
+                    if len(simplified) < 10:
+                        self._add_error(no, id_, f"{var}={raw_val}", f"{var}_號碼少於10碼")
+                        continue  # 若長度不夠，略過其餘檢查
+
+                    # 若開頭非 09 或含非法字元（非數字）
+                    digit_check = simplified.isdigit()
+                    starts_with_09 = simplified.startswith('09')
+                    if not digit_check or not starts_with_09:
+                        self._add_error(no, id_, f"{var}={raw_val}", f"{var}_號碼格式有誤，請確認")
 
 
     def check_filled_notes(self):
@@ -265,8 +295,8 @@ class DataChecker:
     def check_skip(self):
         """
         檢查跳答邏輯：
-        - 來源為 'skip' 工作表時，條件為變數 == -6 或 '-6'，邏輯為 and
-        - 來源為 'skip2' 工作表時，條件為變數 != -6 或 '-6'，邏輯為 or
+        - 來源為 'skip' 工作表時，條件為變數 != -6 或 '-6'，邏輯為 or
+        - 來源為 'skip2' 工作表時，條件為變數 == -6 或 '-6'，邏輯為 and
         """
         for sheet in ['skip', 'skip2']:
             try:
@@ -299,29 +329,29 @@ class DataChecker:
                 logic_join = all if is_skip_sheet else any
 
                 for idx in self.df.index:
-                    a = self.df.at[idx, triA] if triA in self.df.columns else None
-                    b = self.df.at[idx, triB] if triB and triB in self.df.columns else ''
+                    a = self.df.loc[idx, triA] if triA in self.df.columns else None
+                    b = self.df.loc[idx, triB] if triB and triB in self.df.columns else ''
 
                     try:
                         if eval(con):
                             # 根據來源決定是 == -6 還是 != -6
                             num_checks = [
-                                (self.df.at[idx, var] == num_val if op == '==' else self.df.at[idx, var] != num_val)
+                                (self.df.loc[idx, var] == num_val if op == '==' else self.df.loc[idx, var] != num_val)
                                 for var in skip_num_vars if var in self.df.columns
                             ]
                             str_checks = [
-                                (self.df.at[idx, var] == str_val if op == '==' else self.df.at[idx, var] != str_val)
+                                (self.df.loc[idx, var] == str_val if op == '==' else self.df.loc[idx, var] != str_val)
                                 for var in skip_str_vars if var in self.df.columns
                             ]
 
                             if logic_join(num_checks + str_checks):
-                                no = self.df.at[idx, 'no']
-                                id_ = self.df.at[idx, 'id']
+                                no = self.df.loc[idx, 'no']
+                                id_ = self.df.loc[idx, 'id']
                                 content = '，'.join(f"{col}={self.df.at[idx, col]}" for col in output_list if col in self.df.columns)
                                 self._add_error(no, id_, content, desc)
 
                     except Exception as e:
-                        print(f"❗ 跳答檢誤錯誤：check={desc}, id={self.df.at[idx, 'id']}，原因：{e}")
+                        print(f"❗ 跳答檢誤錯誤：check={desc}, id={self.df.loc[idx, 'id']}，原因：{e}")
                         continue
 
 
@@ -365,6 +395,10 @@ class DataChecker:
                         "female_appellation": self.appellation.get("female", []),
                         "participant_appellation": self.appellation.get("participant", [])
                     })
+                    
+                    # ✅ 加這段 → 將 itN 傳入 eval_globals 給 lambda 用
+                    eval_globals.update({k: v for k, v in local_env.items() if k.startswith("it")})
+                    
                     """
                     local_env.update({
                         "spouse_appellation": self.appellation.get("spouse", []),
@@ -382,8 +416,8 @@ class DataChecker:
                         content = '，'.join(f"{var}={self.df.loc[idx, var]}" for var in out_vars)
                         self._add_error(no, id_, content, f"{check_no}_{description}")
                 except Exception as e:
-                    import traceback
-                    traceback.print_exc()
+                    #import traceback
+                    #traceback.print_exc()
                     print(f"❗ 邏輯檢誤錯誤：check_no={check_no}, id={self.df.loc[idx, 'id']}，原因：{e}")
                     continue
     
