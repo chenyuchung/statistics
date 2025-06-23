@@ -130,7 +130,7 @@ class RecodeEngine:
 
 
     def recode_tw_iscd(self, col_level='b1', col_status='b2'):
-        def logic(row):
+        def logic_self_report(row):
             level = row[col_level]
             status = row[col_status]
             if level in [1]: return 10   #010 "Less than primary: Never attended an education programme 無/不識字"1
@@ -157,8 +157,52 @@ class RecodeEngine:
             elif level in [-8]: return -9  # -9 "No answer"
             else: return -90
 
-        self.df['TW_ISCD'] = self.df.apply(logic, axis=1)
-        self.report_invalid('TW_ISCD', [col_level,'k'+col_level, col_status, 'k'+col_status])
+        def logic_by_year(row):
+            level = row[col_level]
+            yr_raw = row['k' + col_status]
+            
+            try:
+                yr = int(yr_raw)
+            except:
+                return -90
+            
+            if level in [1]: return 10   #010 "Less than primary: Never attended an education programme 無/不識字"1
+            elif level in [2]: return 20 #020 "Less than primary: Some early childhood education 自修/識字/私塾" 2
+            elif level in [3] and yr < 6: return 30  #030 "Less than primary: Some primary education (excl. level completion) 小學"3
+            elif level in [3]: return 100 #100 "Primary education 小學"3
+            elif level in [4] and yr < 9: return 242 #242 "Lower sec general: Partial level completion, excl. direct access to upper sec educ 國（初）中"4
+            elif level in [4]: return 243    #243 "Lower sec general: Level completion, excl. direct access to upper sec educ 國（初）中"4
+            elif level in [5] and yr < 9: return 252    #252 "Lower sec voc: Partial level completion, excl. direct access to upper sec educ 初職"5
+            elif level in [5]: return 253    #253 "Lower sec voc: Level completion, excl. direct access to upper sec educ 初職" 5
+            elif level in [6]: return 342 #342 "Upper sec general: Partial level completion, excl. direct access to tert educ 高中普通科"6
+            elif level in [6] and yr >= 12: return 343    #343 "Upper sec general: Level completion, excl. direct access to tert educ 高中普通科" 6
+            elif level in [7, 8, 9] and yr < 12: return 352 #352 "Upper sec voc: Partial level completion, excl. direct access to tert educ 高中職業科/高職/士官學校"789
+            elif level in [7, 8, 9]: return 353    #353 "Upper sec voc: Level completion, excl.  direct access to tert educ 高中職業科/高職/士官學校" 789
+            elif level in [10] and yr < 14: return 450 #450 "Post-secondary non-tertiary education: Vocational 五專" 10
+            elif level in [10]: return 453    #453 "Post-sec non-tert educ voc: Level completion, excl. direct access to tert educ 五專" 10
+            elif level in [11, 12, 13, 14, 15]: return 550      #550 "Short-cycle tertiary education: Vocational 二專/三專/軍警校專修班/軍警校專科班/空中行專/商專 "11 12 13 14 15
+            elif level in [16]: return 600                      #600 "Bachelor’s or equivalent level 空中大學"16
+            elif level in [19] and yr < 16: return 343 #大學肄業或就讀中，歸入高中普通科
+            elif level in [19]: return 640    #640 "Bachelor’s or equivalent level: Academic 大學"19
+            elif level in [17, 18]: return 650                  #650 "Bachelor’s or equivalent level: Professional 軍警官校/軍警官大學/技術學院、科大"17 18"
+            elif level in [20]: return 740 #740 "Master’s or equivalent level: Academic 碩士"20
+            elif level in [21]: return 840 #840 "Doctoral or equivalent level: Academic 博士"21
+            elif level in [-8]: return -9  # -9 "No answer"
+            else: return -90
+
+
+        self.df['TW_ISCD_sr'] = self.df.apply(logic_self_report, axis=1)
+        self.df['TW_ISCD_yr'] = self.df.apply(logic_by_year, axis=1)
+        
+        def edu_check(row):
+            sr = row['TW_ISCD_sr']
+            yr = row['TW_ISCD_yr']
+            
+            if sr == yr: return sr
+            else: return -90
+                 
+        self.df['TW_ISCD'] = self.df.apply(edu_check, axis=1)
+        self.report_invalid('TW_ISCD', [col_level,'k'+col_level, col_status, 'k'+col_status,'TW_ISCD_sr','TW_ISCD_yr'])
 
     """
     【教育程度編碼】

@@ -7,10 +7,12 @@ Created on Wed Apr 30 09:52:48 2025
 
 import pandas as pd
 import os
+import re
+from natsort import natsorted
 
 class DataChecker:
     def __init__(self, df, varlist, path, wave, date, survey_name='問卷組別未設定', multi_pairs=None, work_vars=None, 
-                 note_exclude = [], survey_code='tscs251',appellation=None):
+                 note_exclude = [], survey_code='tscs251',handler='曉芬',appellation=None):
         self.df = df
         self.varlist = varlist
         self.path = path
@@ -22,6 +24,7 @@ class DataChecker:
         self.multi_pairs = multi_pairs if multi_pairs is not None else [('zb5a11', 'kzb5a')]
         self.work_vars = work_vars if work_vars is not None else work
         self.note_exclude = note_exclude       # 排除不需審查的開放題變項
+        self.handler = handler
         
         # ✅ 預設稱謂字典
         self.appellation = appellation if appellation is not None else {
@@ -444,7 +447,166 @@ class DataChecker:
                         reason = "請確認訪員回報的內容"
                         self._add_error(no, id_, content, reason)
 
-    def export_report(self):
+
+    def filter_handled_items(self):
+        """
+        比對歷週處理過的報表，移除重複項目並更新 self.checklist。
+        條件：同一問卷代碼（self.survey_code）處理人（self.handler），依據標準報表命名規則判定。
+        """
+        # 設定路徑與欄位
+        check_root = os.path.join(self.path, "02_check")
+        current_wave = f"w{self.wave}"
+        key_cols = ['訪員編號', '受訪者編號', '變項名稱原始答案', '不符合說明']
+        keep_cols = key_cols + ['計畫回覆']
+    
+        # 初始化累積 DataFrame
+        df_cpast = pd.DataFrame(columns=keep_cols)
+
+        # 瀏覽所有資料夾，尋找過去週次的處理後報表
+        for folder in sorted(os.listdir(check_root)):
+            if not re.match(r"w\d{2}_檢誤報表", folder):
+                continue
+            if folder == current_wave:
+                continue
+            wave_label = folder.split("_")[0]
+
+            subdir = os.path.join(check_root, folder)
+            if not os.path.isdir(subdir):
+                print(f"⚠️ 資料夾 {subdir} 不存在，略過。")
+                continue
+
+            # 搜尋符合處理人且 survey_code 相符的處理後報表
+            pattern = re.compile(
+                rf"{re.escape(self.survey_code)}_問卷檢誤_{wave_label}_(\d+)_({re.escape(self.handler)})(.*)\.xlsx"
+            )
+            matched_files = [f for f in os.listdir(subdir) if pattern.match(f)]
+
+            if not matched_files:
+                print(f"❌ 找不到處理後報表（{self.handler}）於 {folder}，略過。")
+                continue
+
+            # 多個符合就全讀進來
+            for fname in matched_files:
+                fpath = os.path.join(subdir, fname)
+                try:
+                    df_temp = pd.read_excel(fpath)
+                    df_temp = df_temp[keep_cols].copy()
+                    
+                    # 標準化「變項名稱原始答案」的換行符號
+                    df_temp['變項名稱原始答案'] = df_temp['變項名稱原始答案'].astype(str)
+                    df_temp['變項名稱原始答案'] = df_temp['變項名稱原始答案'].str.replace('\r\n', '\n').str.replace('\r\r\r\n', '\n')
+
+                    df_cpast = pd.concat([df_cpast, df_temp], ignore_index=True)
+                    print(f"✅ 已讀取處理後報表：{fname}")
+                except Exception as e:
+                    print(f"⚠️ 讀取失敗：{fname}，錯誤原因：{e}")
+
+        # 處理本週報表（不進行換行標準化）
+        df_now = self.checklist.copy()
+        df_now = df_now[keep_cols]
+
+        # 疊合比對
+        df_all = pd.concat([df_now, df_cpast], ignore_index=True)
+        df_all['dup'] = df_all.duplicated(subset=key_cols, keep=False)
+        df_all = df_all[(df_all['dup'] == False) & (df_all['計畫回覆'] == '')]
+        df_all = df_all.drop(columns='dup').sort_values(by=['變項名稱原始答案']).reset_index(drop=True)
+
+        # 更新 checklist
+        self.checklist = df_all
+        print(f"🔄 已更新 checklist，剩餘尚未處理項目：{len(self.checklist)} 筆")
+
+
+    def generate_time_gap_report(self, threshold_minutes=10, output_excel=True):
+        """
+        掃描答題時間欄位，偵測任兩題間是否有超過 threshold_minutes 的間隔。
+        僅針對完訪資料分析，並輸出報表供人工判讀。
+        
+        Parameters:
+        - threshold_minutes: 設定時間間隔閾值（預設為10分鐘）
+        - output_excel: 是否輸出 Excel 檔案
+        """
+        # 抽出所有欄位
+        cols_all = list(self.df.columns.values)
+        
+        # 選出 ansTime 欄位（排除含 record 的欄位）
+        cols_time = list(filter(lambda x: 'ansTime' in x and 'record' not in x, cols_all))
+        cols_time = natsorted(cols_time)
+
+        # 必要欄位（依你原始範例）
+        base_cols = ['no', 'id', 'status']
+        cols_sel = [col for col in base_cols if col in self.df.columns] + cols_time
+
+        df_time = self.df[cols_sel].copy()
+        df_time = df_time[df_time['status'] == '完訪: 100'].reset_index(drop=True)
+        
+        results = []
+
+        for idx, row in df_time.iterrows():
+            ans_times = row[cols_time]
+            time_list = []
+
+            for val in ans_times:
+                try:
+                    time = pd.to_datetime(val)
+                except:
+                    time = pd.NaT
+                time_list.append(time)
+
+            time_gaps = [None]  # 第一題沒有前一題可比
+            suspicious = False
+            formatted_gaps = []
+
+            for i in range(1, len(time_list)):
+                t1 = time_list[i-1]
+                t2 = time_list[i]
+                if pd.notnull(t1) and pd.notnull(t2):
+                    delta = (t2 - t1).total_seconds() / 60
+                    time_gaps.append(delta)
+                    if delta > threshold_minutes:
+                        suspicious = True
+                        t1_str = t1.strftime("%Y/%m/%d %H:%M:%S")
+                        t2_str = t2.strftime("%Y/%m/%d %H:%M:%S")
+                        formatted = f"{cols_time[i-1]} = {t1_str}，{cols_time[i]} = {t2_str}"
+                        formatted_gaps.append(formatted)
+                else:
+                    time_gaps.append(None)
+
+            result_row = row[base_cols].to_dict()
+            result_row['異常時間差存在'] = suspicious
+            result_row['異常時間段明細'] = formatted_gaps
+            results.append(result_row)
+
+        df_result = pd.DataFrame(results)
+
+        if output_excel:
+            base_folder = os.path.join(self.path, f"02_check/w{self.wave}_檢誤報表")
+            os.makedirs(base_folder, exist_ok=True)
+
+            # 匯出時間異常摘要報表
+            gap_path = os.path.join(base_folder, f"{self.survey_code}_w{self.wave}_ansTime_check.xlsx")
+            df_result.to_excel(gap_path, index=False)
+            print(f"📤 已輸出訪問時間差異報表至：{gap_path}")
+
+            # 匯出完整時間紀錄表
+            full_path = os.path.join(base_folder, f"{self.survey_code}_w{self.wave}_ansTime_data.xlsx")
+            df_time.to_excel(full_path, index=False)
+            print(f"📤 已輸出完整時間紀錄至：{full_path}")   
+
+
+    def export_report(self, init_wave=None):
+        """
+        匯出本週檢誤報表，並自動排除初期週次的疊合處理。
+        init_waves: 可手動指定初期週次（如 ['00','01','02']），將略過歷週報表比對。
+        """
+        
+        if init_wave is None:
+            init_wave = ['00', '01']
+
+        # 過濾已處理過的舊報表項目
+        if self.wave not in init_wave:
+            self.filter_handled_items()
+        
+        
         output_folder = os.path.join(self.path, f"02_check/w{self.wave}_檢誤報表")
         os.makedirs(output_folder, exist_ok=True)
         filename = f"{self.survey_code}_問卷檢誤_w{self.wave}_{self.date}.xlsx"
